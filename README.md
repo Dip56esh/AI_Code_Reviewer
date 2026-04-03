@@ -65,5 +65,5 @@ Interactive docs available at `http://localhost:8000/docs`
 ## Stack
 
 - **Backend** — Python, FastAPI, httpx
-- **AI** — Groq API (Llama 3 70B) or Ollama (local)
-- **Frontend** — Vanilla HTML/CSS/JS (no build step)
+- **AI** — Groq API (Llama 3 70B) 
+- **Frontend** — Vanilla HTML/CSS/JS 
