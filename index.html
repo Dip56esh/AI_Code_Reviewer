@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> AI Code Reviewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0a0f; --surface: #111118; --card: #16161f; --border: #242432;
+    --border2: #2e2e40; --accent: #7c6af7; --accent2: #a78bfa;
+    --green: #34d399; --amber: #fbbf24; --red: #f87171;
+    --text: #e8e8f0; --muted: #6b6b80;
+    --mono: 'JetBrains Mono', monospace; --sans: 'Syne', sans-serif;
+  }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; overflow-x: hidden; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px; opacity: 0.35; pointer-events: none; z-index: 0;
+  }
+  body::after {
+    content: ''; position: fixed; top: -200px; left: 50%; transform: translateX(-50%);
+    width: 800px; height: 600px;
+    background: radial-gradient(ellipse, rgba(124,106,247,0.12) 0%, transparent 70%);
+    pointer-events: none; z-index: 0;
+  }
+  .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 40px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon { width: 36px; height: 36px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  .logo-text { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(90deg, #fff 40%, var(--accent2)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .badge { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border2); color: var(--muted); letter-spacing: 0.05em; }
+  .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 768px) { .main-grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+  .panel-title { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-family: var(--mono); }
+  .lang-select { background: var(--bg); border: 1px solid var(--border2); border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; cursor: pointer; outline: none; transition: border-color 0.2s; }
+  .lang-select:focus { border-color: var(--accent); }
+  .code-area { width: 100%; min-height: 340px; resize: vertical; background: transparent; border: none; color: var(--text); font-family: var(--mono); font-size: 13px; line-height: 1.7; padding: 20px; outline: none; tab-size: 2; }
+  .code-area::placeholder { color: var(--muted); }
+  .context-row { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); }
+  .context-label { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .context-input { flex: 1; background: transparent; border: none; color: var(--text); font-family: var(--mono); font-size: 12px; outline: none; }
+  .context-input::placeholder { color: var(--muted); }
+  .btn-row { padding: 16px 20px; border-top: 1px solid var(--border); }
+  .btn-review { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--accent), #5b4de8); border: none; border-radius: 10px; color: #fff; font-family: var(--sans); font-size: 14px; font-weight: 700; letter-spacing: 0.04em; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.2s, transform 0.1s; position: relative; overflow: hidden; }
+  .btn-review:hover { opacity: 0.9; }
+  .btn-review:active { transform: scale(0.98); }
+  .btn-review:disabled { opacity: 0.45; cursor: not-allowed; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; display: none; }
+  .btn-review.loading .spinner { display: block; }
+  .btn-review.loading .btn-label { display: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .results-body { padding: 20px; min-height: 340px; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 12px; color: var(--muted); text-align: center; }
+  .empty-icon { font-size: 40px; opacity: 0.4; margin-bottom: 4px; }
+  .empty-state p { font-size: 13px; line-height: 1.6; max-width: 200px; }
+  .score-row { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; animation: fadeUp 0.4s ease both; }
+  .score-ring { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+  .score-ring svg { transform: rotate(-90deg); }
+  .score-ring .track { fill: none; stroke: var(--border2); stroke-width: 5; }
+  .score-ring .fill { fill: none; stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset 1s ease; }
+  .score-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 17px; font-weight: 700; }
+  .score-info { flex: 1; }
+  .score-label { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  .score-summary { font-size: 13px; line-height: 1.6; color: var(--text); }
+  .provider-tag { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 4px; background: rgba(124,106,247,0.15); color: var(--accent2); border: 1px solid rgba(124,106,247,0.3); }
+  .issues-list { display: flex; flex-direction: column; gap: 10px; }
+  .issue-card { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; animation: fadeUp 0.35s ease both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .issue-top { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .sev-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sev-high .sev-dot { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .sev-medium .sev-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+  .sev-low .sev-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .sev-badge { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; padding: 2px 7px; border-radius: 4px; }
+  .sev-high .sev-badge { background: rgba(248,113,113,0.15); color: var(--red); }
+  .sev-medium .sev-badge { background: rgba(251,191,36,0.15); color: var(--amber); }
+  .sev-low .sev-badge { background: rgba(52,211,153,0.15); color: var(--green); }
+  .type-badge { font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; background: rgba(124,106,247,0.12); color: var(--accent2); margin-left: auto; }
+  .issue-body { padding: 12px 14px; }
+  .issue-line { font-family: var(--mono); font-size: 11.5px; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; margin-bottom: 8px; white-space: pre-wrap; word-break: break-all; }
+  .issue-desc { font-size: 12.5px; line-height: 1.6; color: var(--text); margin-bottom: 8px; }
+  .issue-suggestion { font-size: 12px; line-height: 1.6; color: var(--green); display: flex; gap: 6px; }
+  .issue-suggestion::before { content: '→'; flex-shrink: 0; opacity: 0.7; }
+  .no-issues { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px; color: var(--green); text-align: center; animation: fadeUp 0.4s ease both; }
+  .no-issues .check { font-size: 36px; }
+  .no-issues p { font-size: 13px; color: var(--muted); }
+  .error-box { background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); border-radius: 10px; padding: 14px 16px; color: var(--red); font-size: 13px; line-height: 1.6; animation: fadeUp 0.3s ease both; }
+  .disclaimer { margin-top: 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 11px; color: var(--muted); line-height: 1.6; font-family: var(--mono); animation: fadeUp 0.5s ease 0.3s both; }
+  .stats-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; animation: fadeUp 0.3s ease both; }
+  .stat-pill { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border2); color: var(--muted); }
+  .stat-pill span { font-weight: 700; }
+  .stat-high { border-color: rgba(248,113,113,0.4); color: var(--red); }
+  .stat-medium { border-color: rgba(251,191,36,0.4); color: var(--amber); }
+  .stat-low { border-color: rgba(52,211,153,0.4); color: var(--green); }
+  .config-bar { display: flex; align-items: center; gap: 10px; padding: 12px 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; font-family: var(--mono); font-size: 12px; }
+  .config-label { color: var(--muted); white-space: nowrap; }
+  .config-input { flex: 1; background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px; outline: none; transition: border-color 0.2s; }
+  .config-input:focus { border-color: var(--accent); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex-shrink: 0; transition: background 0.3s; }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  .examples { display: flex; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface); flex-wrap: wrap; }
+  .ex-btn { font-family: var(--mono); font-size: 11px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border2); background: transparent; color: var(--muted); cursor: pointer; transition: all 0.15s; }
+  .ex-btn:hover { border-color: var(--accent); color: var(--accent2); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">
+      <span class="logo-text">AI code Reviewer</span>
+    </div>
+    <!-- <span class="badge">AI Code Reviewer v2.0</span> -->
+  </header>
+
+  <div class="config-bar">
+    <span class="config-label">API →</span>
+    <input class="config-input" id="apiUrl" value="http://localhost:8000" placeholder="http://localhost:8000">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText" style="color:var(--muted);font-size:11px">checking...</span>
+  </div>
+
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">// code input</span>
+        <select class="lang-select" id="langSelect">
+          <option value="python">Python</option>
+          <option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option>
+          <option value="java">Java</option>
+          <option value="go">Go</option>
+          <option value="rust">Rust</option>
+          <option value="cpp">C++</option>
+          <option value="sql">SQL</option>
+        </select>
+      </div>
+      <textarea class="code-area" id="codeInput" placeholder="# Paste your code snippet here...&#10;# Tip: Ctrl+Enter to run review" spellcheck="false"></textarea>
+      <div class="examples">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-right:4px">Try:</span>
+        <button class="ex-btn" onclick="loadExample('div')">division bug</button>
+        <button class="ex-btn" onclick="loadExample('sql')">SQL injection</button>
+        <button class="ex-btn" onclick="loadExample('list')">list mutation</button>
+        <button class="ex-btn" onclick="loadExample('async')">async mistake</button>
+      </div>
+      <div class="context-row">
+        <span class="context-label">context →</span>
+        <input class="context-input" id="contextInput" placeholder="optional: what is this code supposed to do?">
+      </div>
+      <div class="btn-row">
+        <button class="btn-review" id="reviewBtn" onclick="runReview()">
+          <div class="spinner"></div>
+          <span class="btn-label"> &nbsp; Run AI Review</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">// review output</span>
+        <span class="provider-tag" id="providerTag">groq · llama3</span>
+      </div>
+      <div class="results-body" id="resultsBody">
+        <div class="empty-state">
+          <div class="empty-icon">◈</div>
+          <p>Paste code on the left and hit <strong>Run AI Review</strong> to analyse it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const EXAMPLES = {
+  div: { lang:'python', ctx:'compute average of a list',
+    code:`def calculate_average(numbers):
+    total = 0
+    for n in numbers:
+        total += n
+    return total / len(numbers)
+
+scores = []
+print(calculate_average(scores))`},
+  sql: { lang:'python', ctx:'fetch user from database by username',
+    code:`import sqlite3
+
+def get_user(username):
+    conn = sqlite3.connect('users.db')
+    cursor = conn.cursor()
+    query = "SELECT * FROM users WHERE username = '" + username + "'"
+    cursor.execute(query)
+    return cursor.fetchone()`},
+  list: { lang:'python', ctx:'adds default roles to a user list',
+    code:`def add_defaults(items, defaults=[]):
+    defaults.append('admin')
+    defaults.append('guest')
+    return items + defaults
+
+print(add_defaults(['alice']))
+print(add_defaults(['bob']))`},
+  async: { lang:'javascript', ctx:'fetch multiple users from API',
+    code:`async function fetchAllUsers(ids) {
+  const results = [];
+  for (const id of ids) {
+    const res = await fetch('/api/user/' + id);
+    const data = await res.json();
+    results.push(data);
+  }
+  return results;
+}`}
+};
+
+function loadExample(key) {
+  const ex = EXAMPLES[key];
+  document.getElementById('codeInput').value = ex.code;
+  document.getElementById('contextInput').value = ex.ctx;
+  document.getElementById('langSelect').value = ex.lang;
+}
+
+function getApiUrl() { return document.getElementById('apiUrl').value.replace(/\/$/, ''); }
+
+async function checkHealth() {
+  const dot = document.getElementById('statusDot');
+  const text = document.getElementById('statusText');
+  try {
+    const res = await fetch(getApiUrl() + '/', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      dot.className = 'status-dot online';
+      text.textContent = `online · ${data.provider||'groq'} · ${data.model||'llama3'}`;
+      text.style.color = 'var(--green)';
+      document.getElementById('providerTag').textContent =
+        `${data.provider||'groq'} · ${(data.model||'llama3').split('-')[0]}`;
+    } else throw new Error();
+  } catch {
+    dot.className = 'status-dot offline';
+    text.textContent = 'offline — start uvicorn';
+    text.style.color = 'var(--red)';
+  }
+}
+
+document.getElementById('apiUrl').addEventListener('change', checkHealth);
+checkHealth();
+setInterval(checkHealth, 15000);
+
+function scoreColor(s) { return s>=8?'var(--green)':s>=5?'var(--amber)':'var(--red)'; }
+
+function buildScoreRing(score) {
+  const r = 26, circ = 2*Math.PI*r, pct = score/10, color = scoreColor(score);
+  return `<div class="score-ring">
+    <svg width="64" height="64" viewBox="0 0 64 64">
+      <circle class="track" cx="32" cy="32" r="${r}"/>
+      <circle class="fill" cx="32" cy="32" r="${r}" stroke="${color}"
+        stroke-dasharray="${circ}" stroke-dashoffset="${circ*(1-pct)}"/>
+    </svg>
+    <div class="score-num" style="color:${color}">${score}</div>
+  </div>`;
+}
+
+function buildStats(issues) {
+  const high=issues.filter(i=>i.severity==='high').length;
+  const med=issues.filter(i=>i.severity==='medium').length;
+  const low=issues.filter(i=>i.severity==='low').length;
+  let h=`<div class="stats-bar"><span class="stat-pill"><span>${issues.length}</span> issue${issues.length!==1?'s':''}</span>`;
+  if(high) h+=`<span class="stat-pill stat-high"><span>${high}</span> high</span>`;
+  if(med)  h+=`<span class="stat-pill stat-medium"><span>${med}</span> medium</span>`;
+  if(low)  h+=`<span class="stat-pill stat-low"><span>${low}</span> low</span>`;
+  return h+'</div>';
+}
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function buildIssueCard(issue, idx) {
+  const sev = issue.severity||'low';
+  return `<div class="issue-card sev-${sev}" style="animation-delay:${0.05+idx*0.05}s">
+    <div class="issue-top">
+      <div class="sev-dot"></div>
+      <span class="sev-badge">${sev}</span>
+      <span class="type-badge">${issue.type||'issue'}</span>
+    </div>
+    <div class="issue-body">
+      ${issue.line?`<div class="issue-line">${esc(issue.line)}</div>`:''}
+      <div class="issue-desc">${esc(issue.description)}</div>
+      <div class="issue-suggestion">${esc(issue.suggestion)}</div>
+    </div>
+  </div>`;
+}
+
+async function runReview() {
+  const code = document.getElementById('codeInput').value.trim();
+  const lang = document.getElementById('langSelect').value;
+  const context = document.getElementById('contextInput').value.trim();
+  const btn = document.getElementById('reviewBtn');
+  const results = document.getElementById('resultsBody');
+  if (!code) { results.innerHTML=`<div class="error-box">Please paste some code first.</div>`; return; }
+  btn.disabled=true; btn.classList.add('loading');
+  results.innerHTML=`<div class="empty-state"><div style="width:36px;height:36px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.7s linear infinite;margin-bottom:8px"></div><p>Analysing your code...</p></div>`;
+  try {
+    const res = await fetch(getApiUrl()+'/review', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code,language:lang,context}),
+      signal: AbortSignal.timeout(60000)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail||`Server error ${res.status}`);
+    const issues = data.issues||[];
+    let html = `<div class="score-row">${buildScoreRing(data.overall_score)}<div class="score-info"><div class="score-label">quality score</div><div class="score-summary">${esc(data.summary)}</div></div></div>`;
+    html += buildStats(issues);
+    if (issues.length===0) {
+      html+=`<div class="no-issues"><div class="check">✓</div><strong>Looks clean!</strong><p>No bugs or significant issues found.</p></div>`;
+    } else {
+      html+=`<div class="issues-list">${issues.map((iss,i)=>buildIssueCard(iss,i)).join('')}</div>`;
+    }
+    if (data.disclaimer) html+=`<div class="disclaimer">${esc(data.disclaimer)}</div>`;
+    results.innerHTML=html;
+  } catch(err) {
+    let msg=err.message;
+    if(msg.includes('fetch')||msg.includes('Network')||msg.includes('timeout'))
+      msg='Cannot reach the API.\n\nMake sure your FastAPI server is running:\n\nuvicorn main:app --reload';
+    results.innerHTML=`<div class="error-box" style="white-space:pre-wrap;font-family:var(--mono);font-size:12px">${esc(msg)}</div>`;
+  } finally { btn.disabled=false; btn.classList.remove('loading'); }
+}
+
+document.getElementById('codeInput').addEventListener('keydown', e => {
+  if (e.key==='Enter' && (e.ctrlKey||e.metaKey)) runReview();
+});
+</script>
+</body>
+</html>
